@@ -1,0 +1,474 @@
+```{r}
+#Installing the needed packages
+install.packages("tidyverse")
+install.packages("dplr")
+install.packages("corrplot")
+install.packages("caret")
+install.packages("e1071")
+install.packages("rpart")
+install.packages("randomForest")
+install.packages("gbm")
+install.packages("ranger")
+```
+
+
+```{r}
+#Reading the needed packages
+library(readr)
+library(dplyr)
+library(corrplot)
+library(caret)
+library(e1071)
+library(rpart)
+library(randomForest)
+library(gbm)
+library(ranger)
+```
+
+```{r}
+#House data Imported
+setwd("C:/Users/OLA-PC/Downloads")
+getwd()
+house_data<- read.csv("Housing Data_Same Region.csv")
+View(house_data)
+
+```
+```{r}
+#Checking for duplicates using the unique Parcel No
+house_data %>%
+  group_by(PARCELNO) %>%
+  filter(n() > 1)
+```
+```{r}
+#Droping duplicates rows indentfied with unique Parcel No
+house_data_unique <- house_data %>% distinct(PARCELNO, .keep_all = TRUE)
+# Check if duplicates still exist in house_data_unique
+house_data_unique %>%
+  group_by(PARCELNO) %>%
+  filter(n() > 1)
+```
+```{r}
+#Dropping unwanted columns in the data set
+house_datas <- house_data_unique %>% select(-LONGITUDE, -LATITUDE, -PARCELNO, -avno60plus)
+print(house_datas)
+```
+
+```{r}
+# Relocating the SALE_PRC to the end of the data frame
+House_Data <- house_datas %>%
+  relocate(SALE_PRC, .after = last_col())
+print(House_Data)
+```
+```{r}
+#Checking for NA, Null, Nil and NaN
+any(is.na(House_Data))
+```
+```{r}
+#Plotting box plot to detect outliers
+boxplot(House_Data, main = "Outliers in Numeric Columns", las = 2)
+
+```
+```{r}
+# Group and count the frequency of each month
+month_freq <- House_Data %>%
+  group_by(month_sold) %>%
+  summarise(Frequency = n())
+# Convert month numbers to factor with correct ordering
+month_freq$month_sold <- factor(month_freq$month_sold, levels = 1:12, 
+                                labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+# Plot the frequency of sales per month
+ggplot(month_freq, aes(x = month_sold, y = Frequency, fill = month_sold)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Sales Frequency by Month", x = "Month", y = "Number of Sales") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +  # Optional color scheme
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+```{r}
+# Calculating correlation matrix
+cor_matrix <- cor(House_Data, use = "complete.obs")
+
+# Display correlations with the target variable "SALE_PRC"
+cor_matrix["SALE_PRC", ] %>% sort(decreasing = TRUE)
+```
+```{r}
+#Plotting the correlation matrix
+corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8, tl.col = "black")
+
+```
+```{r}
+# Trying different correlation thresholds
+thresholds <- seq(0.2, 0.7, by = 0.1)
+#Looping throughing the threshold
+for (t in thresholds) {
+  selected_features <- names(which(abs(cor_matrix["SALE_PRC", ]) > t))
+  selected_features <- setdiff(selected_features, "SALE_PRC")  # Remove "Price" itself
+  
+  print(paste("Threshold:", t, "Selected Features:", paste(selected_features, collapse=", ")))
+}
+
+```
+
+```{r}
+# Defining threshold
+threshold <- 0.2
+
+# Variable names with strong correlation to "Price"
+important_features <- names(which(abs(cor_matrix["SALE_PRC", ]) > threshold))
+important_features <- setdiff(important_features, "SALE_PRC")  # Remove "Price" itself
+
+print(important_features)
+```
+```{r}
+#Removing Columns based on 0.2 Threshold
+final_house_data <- house_data %>% select(all_of(important_features), SALE_PRC)
+colnames(final_house_data) <- c("Land_Area", "Floor_Area", "Special_Features", 
+                                "Distance_Ocean", "Distance_Miami", "Distance_Subcentre", 
+                                "Distance_Highway", "Structure_Quality", "Price")
+
+```
+```{r}
+#Setting seed for reproducibility 
+set.seed(123)
+#Splitting data into 70% Training and 30% Test
+sample_size <- floor(0.7 * nrow(final_house_data))
+train_index <- sample(seq_len(nrow(final_house_data)),size = sample_size)
+train_data <- final_house_data[ train_index, ]
+test_data <- final_house_data[-train_index, ]
+```
+
+```{r}
+#Training Linear Regression Model
+lm_model <- lm(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data)
+```
+```{r}
+#Making Predictions with the Linear Regression Model using the test dataset
+lm_predictions <- predict(lm_model, newdata = test_data)
+```
+```{r}
+#Calculating the error metrics of LM Model
+lm_perfomance <- postResample(pred = lm_predictions, obs=test_data$Price)
+print(lm_perfomance)
+
+```
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, lm_predictions, main = "Actual vs Predicted House Prices for LR Model",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Linear Regression(SVR) with a Linear Kernel Model
+saveRDS(lm_model, "Linear_model.rds")
+```
+
+
+```{r}
+#Training the Support Vector Regression Model
+svr_linear <- svm(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data, kernel="linear")
+```
+```{r}
+#Making Predictions with the SVR Model
+svr_linear_predictions <- predict(svr_linear, newdata = test_data)
+```
+```{r}
+#Calculating the error metrics of SVR Linear Model
+svr_linear_perfomance <- postResample(pred = svr_linear_predictions, obs=test_data$Price)
+print(svr_linear_perfomance)
+
+```
+
+
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, svr_linear_predictions, main = "Actual vs Predicted House Prices for SVR Linear Model",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Support Vector Regression with Linear Kernel Model
+saveRDS(svr_linear, "Svr_linear_model.rds")
+```
+
+```{r}
+#Training the Support Vector Regression Poly Model
+svr_poly <- svm(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data, kernel="poly")
+```
+```{r}
+#Making Predictions with the SVR Poly Model
+svr_poly_predictions <- predict(svr_poly, newdata = test_data)
+
+```
+```{r}
+#Calculating the error metrics of SVR Poly Model
+svr_poly_perfomance <- postResample(pred = svr_poly_predictions, obs=test_data$Price)
+print(svr_linear_perfomance)
+
+```
+```{r}
+plot(test_data$Price, svr_poly_predictions, main = "Actual vs Predicted House Prices for SVR Poly Model",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Support Vector Regression Model
+saveRDS(svr_poly, "Svr_poly_model.rds")
+```
+
+```{r}
+#Training the Decision Tree Model
+dt_model <- rpart(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data)
+
+```
+```{r}
+#Making Predictions with the Decision Tree Model
+dt_predictions <- predict(dt_model, newdata = test_data)
+```
+```{r}
+#Calculating the error metrics of Decision Tree Model
+dt_perfomance <- postResample(pred = dt_predictions, obs=test_data$Price)
+print(dt_perfomance)
+
+```
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, dt_predictions, main = "Actual vs Predicted House Prices for Decision Tree Model",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Decision Tree Model
+saveRDS(dt_model, "Decision_tree_model.rds")
+```
+
+```{r}
+#Training the Random Forest Model with 100 Trees
+rf_model_n100 <- randomForest(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data, ntree=100)
+
+```
+```{r}
+#Making Predictions with the Random Forest Trees=100 Model
+rf_predictions_n100 <- predict(rf_model_n100, newdata = test_data)
+```
+
+
+```{r}
+#Calculating the error metrics of Random Forest Trees = 100 Model
+rf_perfomance_n100 <- postResample(pred = rf_predictions_n100, obs=test_data$Price)
+print(rf_perfomance_n100)
+```
+```{r}
+plot(test_data$Price, rf_predictions_n100, main = "Actual vs Predicted Sales Price of Random Forest Model with 100 Trees",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Random Forest Model with 100 trees
+saveRDS(rf_model_n100, "RF_n100_model.rds")
+```
+
+```{r}
+# Training the Random Forest n = 200 Model
+rf_model_n200 <- randomForest(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data, ntree=200)
+
+```
+```{r}
+#Making Predictions with the Random Forest n=200 Model
+rf_predictions_n200 <- predict(rf_model_n200, newdata = test_data)
+```
+
+
+```{r}
+#Calculating the error metrics of Random Forest n = 200 Model
+rf_perfomance_n200 <- postResample(pred = rf_predictions_n200, obs=test_data$Price)
+print(rf_perfomance_n200)
+```
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, rf_predictions_n200, main = "Actual vs Predicted House Price of Random Forest Model with 200 Trees",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Random Forest Model with 200 trees
+saveRDS(rf_model_n200, "RF_n200_model.rds")
+```
+
+```{r}
+# Training the Random Forest n = 500 Model
+rf_model_n500 <- randomForest(Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , data = train_data, ntree=500)
+
+```
+```{r}
+#Making Predictions with the Random Forest n = 500 Model
+rf_predictions_n500 <- predict(rf_model_n500, newdata = test_data)
+```
+
+
+```{r}
+#Calculating the error metrics of Random Forest n = 500 Model
+rf_perfomance_n500 <- postResample(pred = rf_predictions_n500, obs=test_data$Price)
+print(rf_perfomance_n500)
+```
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, rf_predictions_n500, main = "Actual vs Predicted House Prices for Random Forest Model with n= 500",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+```
+```{r}
+#Saving the Random Forest Model with 500 trees
+saveRDS(rf_model_n500, "RF_n500_model.rds")
+```
+
+```{r}
+# Training Gradient Boosting Model with numbers of tree = 1000
+gbm_model <-  gbm(
+  formula = Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality , 
+  data = train_data,
+  distribution = "gaussian",
+  n.trees = 1000)
+
+```
+```{r}
+#Making Predictions with the Gradient Boosting Model
+gbm_predictions <- predict(gbm_model, newdata = test_data)
+```
+```{r}
+#Calculating the error metrics of Gradient Boosting Model
+gbm_perfomance <- postResample(pred = gbm_predictions, obs=test_data$Price)
+print(gbm_perfomance)
+```
+```{r}
+#Plotting the scatter plot for regression
+plot(test_data$Price, gbm_predictions, main = "Actual vs Predicted House Prices for Gradient Boosting Model",
+     xlab = "Actual Prices", ylab = "Predicted Prices", col = "blue", pch = 16)
+abline(0,1, col = "red", lwd = 2)  # Line of perfect prediction
+
+```
+```{r}
+#Saving the Gradient Bosting Model with 1000 trees
+saveRDS(gbm_model, "Gradient_Boosting_model.rds")
+```
+
+```{r}
+# Creating a data frame for plotting the MAE value of each model
+error_metrics <- data.frame(
+  Model = c("LR_Model", "SVR_Linear", "SVR_Poly", "DT Model", "RF_100", "RF_200", "RF_500", "GB_Model" ),
+  Err_value = c( lm_perfomance[3], svr_linear_perfomance[3], svr_poly_perfomance[3], dt_perfomance[3], rf_perfomance_n100[3], rf_perfomance_n200[3], rf_perfomance_n500[3], gbm_perfomance[3])
+)
+
+```
+```{r}
+# Plot Error Metrics
+ggplot(error_metrics, aes(x = Model, y = Err_value, fill = Model)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(title = "Model MAE Metrics", x = "Models", y = "Value") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")  # Nice color scheme
+
+```
+```{r}
+# Define tuning grid: mtry = number of features to try at each split
+mtry_range <- expand.grid(mtry = seq(2, ncol(train_data) - 1, by = 1))
+
+# Define cross-validation strategy (5-fold CV)
+control <- trainControl(method = "cv", number = 5)
+
+```
+
+```{r}
+# Define the tuning grid for 'mtry' and 'min.node.size'
+tune_grid <- expand.grid(
+  mtry = 2:5,               # Number of variables to try at each split
+  splitrule = "variance",
+  min.node.size = c(1, 5, 10)  # Minimum size of terminal nodes
+)
+# Set up cross-validation control
+control <- trainControl(method = "cv", number = 10, 
+                        summaryFunction = defaultSummary, 
+                        savePredictions = "final",        
+                        allowParallel = TRUE)   
+# Train the Random Forest model using 'ranger' engine from caret
+rf_100_tuned <- caret::train(
+  Price ~ Land_Area + Floor_Area + Special_Features + Distance_Miami + Structure_Quality,
+  data = train_data,
+  method = "ranger",   #'ranger' method (efficient random forest implementation)
+  tuneGrid = tune_grid,  # Grid for tuning 'mtry' and 'min.node.size'
+  trControl = control,    # Cross-validation setup
+  importance = 'permutation',      # Use permutation importance for better results
+  metric = "MAE",        # Evaluation metric
+  num.trees = 100         # Number of trees
+)
+# Check the results of the training
+print(rf_100_tuned)
+# Plot the results (optional, visualizes the tuning results)
+plot(rf_100_tuned)
+
+
+
+```
+```{r}
+# Predict on test data using best tuned model
+tuned_rf_predictions <- predict(rf_100_tuned, newdata = test_data)
+```
+```{r}
+#Checking the performance of the tuned model
+tuned_rf_perfomance <- postResample(pred = tuned_rf_predictions, obs=test_data$Price)
+print(tuned_rf_perfomance)
+
+```
+```{r}
+# Creating a data frame for plotting the MAE value of each model
+tuned_perfomance <- data.frame(
+  Model = c("Tuned_RF_100", "RF_100" ),
+  Err_value = c( tuned_rf_perfomance[3],  rf_perfomance_n100[3])
+)
+
+```
+```{r}
+# Ploting Error Metrics
+ggplot(tuned_perfomance, aes(x = Model, y = Err_value, fill = Model)) +
+  geom_bar(stat = "identity", width = 0.2) +
+  labs(title = "Model Error Metrics", x = "Models", y = "Value") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")  # Nice color scheme
+```
+```{r}
+#Saving the Hyperparameter tuned Model
+saveRDS(rf_100_tuned, "Best_model_tuned.rds")
+```
+
+```{r}
+# Evaluation of the model 
+#1. Creation of a evaluation dataframe
+# Create the eval_data dataframe with specified column names and values
+eval_data <- data.frame(
+  PARCELNO = 728980145245,
+  Land_Area = 11247,
+  Floor_Area = 4552,
+  Special_Features = 2105,
+  RAIL_DIST = 4871.9,
+  Distance_Ocean = 18507.2,
+  WATER_DIST = 375.8,
+  Distance_Miami = 43897.9,
+  Distance_Subcentre = 40115.7,
+  Distance_Highway = 41917.1,
+  age = 42,
+  avno60plus = 0,
+  Structure_Quality = 5,
+  month_sold = 8
+)
+print(eval_data)
+
+```
+```{r}
+# Loading the saved best model
+best_model <- readRDS("Best_model_tuned.rds")
+#Making predictions with the best model
+eval_predictions <- predict(best_model, newdata = eval_data)
+print(eval_predictions)
+```
+
