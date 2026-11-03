@@ -10,8 +10,6 @@ install.packages("randomForest")
 install.packages("gbm")
 install.packages("ranger")
 ```
-
-
 ```{r}
 #Reading the needed packages
 library(readr)
@@ -406,8 +404,6 @@ rf_100_tuned <- caret::train(
 print(rf_100_tuned)
 # Plot the results (optional, visualizes the tuning results)
 plot(rf_100_tuned)
-
-
 
 ```
 ```{r}
