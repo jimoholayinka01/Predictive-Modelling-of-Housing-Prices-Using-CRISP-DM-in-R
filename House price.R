@@ -51,7 +51,6 @@ any(is.na(House_Data))
 #Plotting box plot to detect outliers
 boxplot(House_Data, main = "Outliers in Numeric Columns", las = 2)
 
-
 # Group and count the frequency of each month
 month_freq <- House_Data %>%
   group_by(month_sold) %>%

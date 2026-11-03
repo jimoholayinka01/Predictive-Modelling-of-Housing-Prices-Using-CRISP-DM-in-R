@@ -1,7 +1,6 @@
 # Predictive-Modelling-of-Housing-Prices-Using-CRISP-DM-in-R
 This project applies the CRISP-DM framework to a structured housing dataset to forecast **property sale prices** and evaluate price appreciation potential. Using R programming, multiple regression models were developed and evaluated, with the final model selected based on performance metrics and business alignment.
 ---
-
 ## CRISP-DM Phases
 ### 1. Business Understanding
 - **Objective:** Maximise ROI by predicting property prices and identifying undervalued properties.
@@ -39,7 +38,7 @@ Eight models were built using the training data (70/30 split):
 | SVR (Linear)        | Moderate             |
 | SVR (Poly)          | Moderate             |
 | Decision Tree       | Moderate             |
-| **Random Forest (100 Trees)** | **Lowest MAE** ✅ |
+| **Random Forest (100 Trees)** | **Lowest MAE** |
 | Random Forest (200/500 Trees) | Slightly higher MAE |
 | Gradient Boosting   | Competitive          |
 
@@ -57,24 +56,24 @@ Eight models were built using the training data (70/30 split):
 ---
 
 
-### 🧩 Integration
+### Integration
 - Deploy model (`best_model.rds`) via **Shiny** or **Azure ML Web Service**
 - Input features return a predicted price in real-time
 
-### 🔄 Data Pipeline
+### Data Pipeline
 - Automated input from property databases or APIs
 - Keeps model up-to-date with new listings and trends
 
-### 🖥️ User Interface
+### User Interface
 - Simple UI for non-technical users (e.g., analysts, realtors)
 - Input fields: land area, structure quality, distance to city/ocean, etc.
 
-### 📄 Documentation
+### Documentation
 - Technical and user guides for onboarding and model usage
 
 ---
 
-## 🔍 Key Insights
+## Key Insights
 
 - **Random Forest with 100 Trees** was the best-performing model (lowest MAE)
 - **Land Area, Living Space, and Structure Quality** were top predictors
@@ -84,7 +83,7 @@ Eight models were built using the training data (70/30 split):
 
 ---
 
-## 🛠️ Tools & Libraries
+## Tools & Libraries
 
 - **Language:** R
 - **Libraries:** `tidyverse`, `ggplot2`, `caret`, `randomForest`, `e1071`, `gbm`, `rpart`
@@ -92,7 +91,7 @@ Eight models were built using the training data (70/30 split):
 - **Deployment Plan:** Shiny + Azure ML
 ---
 
-## 📈 Future Improvements
+## Future Improvements
 
 - Use larger or multi-region datasets
 - Introduce geospatial modelling (e.g., spatial interpolation)
